@@ -1,0 +1,21 @@
+{
+  "name": "chord-practice",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "tonal": "^6.4.3",
+    "ts-fsrs": "^5.4.2"
+  },
+  "scripts": {
+    "build": "bun scripts/build.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit -p .",
+    "serve": "bun scripts/build.ts && bunx serve dist -l 5173"
+  }
+}
