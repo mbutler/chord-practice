@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Logs & caches
+*.log
+.cache/
+*.tsbuildinfo
+
+# Env / secrets
+.env
+.env.*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+*~
