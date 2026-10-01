@@ -1,3 +1,4 @@
+import { rhythmFor, RhythmPlayer } from "./rhythm";
 import type { Card, ChordCard, Deck, Inversion, ProgressionCard, Voicing } from "../types";
 import { inversionLabel, INVERSION_LABELS } from "../types";
 import { STAGES } from "../deck/stages";
@@ -25,6 +26,15 @@ interface Showing {
   answerMs: number;
 }
 let showing: Showing | null = null;
+const rhythmPlayer = new RhythmPlayer();
+let rhythmTempo = 72;
+let rhythmPlaying = false;
+function stopRhythm() {
+  rhythmPlayer.stop(); rhythmPlaying = false;
+  document.querySelectorAll(".rhythm-cell.active").forEach((el) => el.classList.remove("active"));
+  const button = document.querySelector<HTMLButtonElement>("[data-action=listen]");
+  if (button) button.textContent = "Listen to rhythm";
+}
 
 const app = document.getElementById("app")!;
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -39,6 +49,7 @@ function go(route: Route, arg?: string) {
 }
 
 function render() {
+  stopRhythm();
   const [route, arg] = location.hash.slice(1).split("/");
   window.scrollTo(0, 0);
   switch (route) {
@@ -141,6 +152,7 @@ function renderHome() {
 // ── Study ────────────────────────────────────────────────────────────────
 
 function show(card: Card) {
+  stopRhythm();
   let inversion: Inversion = 0;
   let style = "";
   if (card.kind === "chord") {
@@ -200,7 +212,39 @@ function progressionFront(card: ProgressionCard, style: string): string {
     ${progressionPrompt(card, data.settings.promptStyle)}
     <p class="chip">Start: ${esc(inversionLabel(card.startInversion))}</p>
     <p class="chip style">${esc(style)}</p>
+    ${rhythmReference(style)}
     <p class="help">${card.guided ? "Practice with the diagrams. Grade how comfortably you kept the rhythm through the changes." : "Keep a steady rhythm. These diagrams suggest nearby inversions; other comfortable chord voicings are valid."}</p>`;
+}
+
+function rhythmReference(style: string): string {
+  const rhythm = rhythmFor(style);
+  return `<section class="rhythm-reference" aria-label="Rhythm reference">
+    <div class="row"><button data-action="listen">Listen to rhythm</button>
+    <label>Tempo <select id="rhythm-tempo" aria-label="Rhythm tempo">${[48, 60, 72, 90, 110, 130].map((bpm) => `<option value="${bpm}" ${bpm === rhythmTempo ? "selected" : ""}>${bpm} BPM</option>`).join("")}</select></label></div>
+    <p class="help">One bar of count-in, then two bars on C major. Follow the clicks. This is a practice example of the style.</p>
+    <div class="rhythm-grid" style="--pulses:${rhythm.count.length}">${rhythm.count.map((count, i) => `<div class="rhythm-cell" data-pulse="${i}"><b>${count}</b><span>${rhythm.cells[i]}</span></div>`).join("")}</div>
+    <p>${esc(rhythm.description)}</p><p class="help" id="rhythm-status" role="status"></p>
+  </section>`;
+}
+
+async function listenRhythm() {
+  if (rhythmPlaying) { stopRhythm(); return; }
+  const style = showing?.card.kind === "progression" ? showing.style : "";
+  if (!style) return;
+  rhythmPlaying = true;
+  const button = document.querySelector<HTMLButtonElement>("[data-action=listen]");
+  if (button) button.textContent = "Stop rhythm";
+  try {
+    const rhythm = rhythmFor(style);
+    await rhythmPlayer.play(rhythm, rhythmTempo, (index) => {
+      document.querySelectorAll(".rhythm-cell.active").forEach((el) => el.classList.remove("active"));
+      document.querySelector(`[data-pulse="${index}"]`)?.classList.add("active");
+    }, stopRhythm);
+  } catch {
+    stopRhythm();
+    const status = document.getElementById("rhythm-status");
+    if (status) status.textContent = "Audio could not start. Try Listen again and check your device volume.";
+  }
 }
 
 function progressionBack(card: ProgressionCard): string {
@@ -222,6 +266,7 @@ function gradeButtons(card: Card): string {
 }
 
 function reveal() {
+  stopRhythm();
   if (!showing || showing.revealed) return;
   showing.revealed = true;
   showing.answerMs = Date.now() - showing.shownAt;
@@ -374,6 +419,7 @@ app.addEventListener("click", (e) => {
     return;
   }
   switch (d.action) {
+    case "listen": return void listenRhythm();
     case "reveal": return reveal();
     case "undo": return undo();
     case "export": return exportBackup(data);
@@ -387,6 +433,11 @@ app.addEventListener("click", (e) => {
   }
 });
 
+app.addEventListener("change", (event) => {
+  const target = event.target as HTMLSelectElement;
+  if (target.id === "rhythm-tempo") { stopRhythm(); rhythmTempo = Number(target.value); }
+});
+
 // Keyboard shortcuts (iPad Magic Keyboard / desktop): space reveals, 1–4 grade, z undoes.
 document.addEventListener("keydown", (e) => {
   if (!location.hash.startsWith("#study") || e.metaKey || e.ctrlKey || (e.target as HTMLElement).tagName === "INPUT") return;
@@ -397,7 +448,7 @@ document.addEventListener("keydown", (e) => {
 
 // A new study day may start while the app sits open on the iPad.
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState !== "visible") return;
+  if (document.visibilityState !== "visible") { stopRhythm(); return; }
   const fresh = load();
   if (fresh.today.day !== data.today.day) {
     data = fresh;

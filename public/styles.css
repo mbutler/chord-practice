@@ -221,3 +221,11 @@ input[type=search] {
   .tiles, .tiles.pair, .tiles.steps, .tiles.solo { grid-template-columns: minmax(0, 1fr); }
   .progress li { grid-template-columns: 1fr 64px 56px; }
 }
+
+.rhythm-reference { text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin: 20px auto; max-width: 760px; }
+.rhythm-reference .row { align-items: center; }
+.rhythm-reference select { font: inherit; color: var(--ink); background: var(--surface-2); padding: 10px; border: 1px solid var(--line); border-radius: 8px; }
+.rhythm-grid { display: grid; grid-template-columns: repeat(var(--pulses), minmax(0, 1fr)); gap: 4px; margin: 16px 0; }
+.rhythm-cell { display: flex; flex-direction: column; align-items: center; padding: 10px 2px; border-radius: 8px; background: var(--surface-2); }
+.rhythm-cell span { font-size: 12px; }
+.rhythm-cell.active { outline: 3px solid var(--accent); background: var(--bg); }

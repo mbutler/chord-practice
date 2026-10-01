@@ -16,6 +16,10 @@ built for an iPad at the piano.
   to move through familiar stages faster. All material remains available in Library.
 - Right-hand shapes follow Piano For All: 7ths and 6ths are 3-note shapes (C7 = Bb E G),
   with the left hand assumed to play the root.
+- Progression practice includes a rhythm reference: count-in clicks, two bars of
+  synthesized C-major audio, adjustable tempo, and a highlighted beat pattern.
+  These are concrete examples of the style labels, not course transcriptions.
+  Playback stops when you change cards, tempo, or leave the page.
 - Scheduling is FSRS (the algorithm Anki uses), with Again / Hard / Good / Easy.
 
 ## Build & deploy
