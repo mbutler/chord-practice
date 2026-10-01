@@ -3,10 +3,17 @@
 Spaced-repetition practice for Piano For All chords, inversions and progressions,
 built for an iPad at the piano.
 
-- **Chord shapes (Tier 1):** see a chord symbol, play it in the inversion asked for
-  (Root, Backwards / 1st inversion, Middle / 2nd inversion; picked at random each review).
-- **Progressions (Tiers 2–3):** play a progression in a given key, starting from a given
-  inversion, voice-led so the hand barely moves. A rhythm style is picked at random each review.
+- Start with C, G and F major root-position recall, then play C–F–G with a simple
+  rhythm and visible diagrams. Expand through major roots (including B/Bb), minor
+  roots, first inversions, second inversions, and then more advanced shapes.
+- Guided rhythm exercises appear alongside the early chords. Later progression
+  cards use nearby inversions and all the original rhythm styles in every key.
+- Each chord inversion has its own FSRS schedule. New stages open when every enabled
+  card in the current stage has graduated to review with a Good or Easy grade.
+  Difficult reviews pause new introductions until successful again.
+- Easy lets familiar material advance immediately; Good may require a short learning
+  repeat. The daily new-card setting is a maximum, not a target. Raise it in Settings
+  to move through familiar stages faster. All material remains available in Library.
 - Right-hand shapes follow Piano For All: 7ths and 6ths are 3-note shapes (C7 = Bb E G),
   with the left hand assumed to play the root.
 - Scheduling is FSRS (the algorithm Anki uses), with Again / Hard / Good / Easy.
@@ -42,6 +49,11 @@ bun run typecheck
 | `src/deck/definitions.ts` | Curriculum: chord types, progressions, hints, rhythm styles, introduction order |
 | `src/deck/generate.ts` | Expands definitions across 12 keys into `deck.json` |
 | `src/app/` | The web app: scheduler (FSRS), storage, keyboard SVG, screens |
+
+Curriculum v2 starts fresh in a separate browser storage key (`chord-practice:v2`).
+The old v1 data remains untouched. Chord ids now include the inversion
+(`t1_c_maj_root`, `t1_c_maj_bwd`, `t1_c_maj_mid`); old chord histories do not transfer.
+This is a graded learning sequence inspired by the course, not an exact lesson order.
 
 Card ids are stable (`t3_iivi_bb_mid`), and saved progress is keyed on them. Renaming a
 progression id or key slug orphans its history.

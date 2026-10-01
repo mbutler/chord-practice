@@ -1,8 +1,9 @@
 import type { Card, ChordCard, Deck, Inversion, ProgressionCard, Voicing } from "../types";
 import { inversionLabel, INVERSION_LABELS } from "../types";
+import { STAGES } from "../deck/stages";
 import { CATEGORY_FILTERS } from "../deck/categories";
 import { keyboardSvg, rangeFor } from "./keyboard";
-import { formatInterval, GRADES, isActive, Session } from "./scheduler";
+import { currentLevel, formatInterval, GRADES, isActive, Session } from "./scheduler";
 import {
   emptyData, exportBackup, importBackup, load, requestPersistence, save,
   type PromptStyle, type SaveData,
@@ -119,6 +120,7 @@ function renderHome() {
       <h1 class="title">Chord Practice</h1>
       <p class="subtitle">Piano For All · chords, inversions &amp; progressions</p>
       ${isStandalone() ? "" : `<p class="notice">Progress is saved in this browser only. To keep it safe, add this page to your Home Screen (Share → Add to Home Screen) and export a backup now and then from Settings.</p>`}
+      <p class="notice">${currentLevel(deck, data) === null ? "All stages introduced · keep practicing your reviews." : `Stage ${currentLevel(deck, data)}: ${esc(STAGES[currentLevel(deck, data)!] ?? "Practice")}<br>New stages open after successful reviews. Easy moves familiar cards ahead; Again and Hard give difficult shapes more practice.`}</p>
       <section class="counts">
         <div><b class="n-learn">${c.learning}</b><span>Learning</span></div>
         <div><b class="n-review">${c.review}</b><span>Review</span></div>
@@ -138,22 +140,15 @@ function renderHome() {
 
 // ── Study ────────────────────────────────────────────────────────────────
 
-function lastAsked(id: string): string | undefined {
-  for (let i = data.log.length - 1; i >= 0; i--) if (data.log[i]!.id === id) return data.log[i]!.asked;
-}
-
 function show(card: Card) {
   let inversion: Inversion = 0;
   let style = "";
   if (card.kind === "chord") {
-    // Rotate through inversions: never ask for the same one twice in a row.
-    const prev = lastAsked(card.id);
-    const options = ([0, 1, 2] as Inversion[]).filter((i) => INVERSION_LABELS[i].pfa !== prev);
-    inversion = pick(options);
+    inversion = card.targetInversion;
   } else {
     style = pick(card.styles);
   }
-  showing = { card, inversion, style, revealed: false, shownAt: Date.now(), answerMs: 0 };
+  showing = { card, inversion, style, revealed: card.kind === "progression" && !!card.guided, shownAt: Date.now(), answerMs: 0 };
 }
 
 function renderStudy() {
@@ -196,15 +191,16 @@ function chordBack(card: ChordCard, inv?: Inversion): string {
   const others = card.inversions.filter((_, i) => i !== inv);
   return `<div class="tiles solo">${voicingTile(asked, { range: rangeFor(asked.midi), highlight: true })}</div>
     ${hint}
-    <p class="others-label">Other inversions</p>
-    <div class="tiles pair">${others.map((v) => voicingTile(v, { range })).join("")}</div>`;
+    <details><summary class="others-label">Other inversions (reference)</summary>
+    <div class="tiles pair">${others.map((v) => voicingTile(v, { range })).join("")}</div></details>`;
 }
 
 function progressionFront(card: ProgressionCard, style: string): string {
   return `<p class="eyebrow">${esc(card.name)} · Key of ${esc(card.key)}</p>
     ${progressionPrompt(card, data.settings.promptStyle)}
     <p class="chip">Start: ${esc(inversionLabel(card.startInversion))}</p>
-    <p class="chip style">${esc(style)}</p>`;
+    <p class="chip style">${esc(style)}</p>
+    <p class="help">${card.guided ? "Practice with the diagrams. Grade how comfortably you kept the rhythm through the changes." : "Keep a steady rhythm. These diagrams suggest nearby inversions; other comfortable chord voicings are valid."}</p>`;
 }
 
 function progressionBack(card: ProgressionCard): string {
@@ -218,7 +214,10 @@ function progressionBack(card: ProgressionCard): string {
 
 function gradeButtons(card: Card): string {
   const due = session!.preview(card);
-  return `<div class="grades">${GRADES.map((g) => `<button class="grade g${g.rating}" data-grade="${g.rating}">
+  const guidance = card.kind === "progression" && card.guided
+    ? "Again: could not keep the pattern going · Hard: frequent stops · Good: steady with effort · Easy: comfortable and steady."
+    : "Again: needed the answer · Hard: worked it out with difficulty · Good: correct with some effort · Easy: fluent and comfortable.";
+  return `<p class="help">${guidance}</p><div class="grades">${GRADES.map((g) => `<button class="grade g${g.rating}" data-grade="${g.rating}">
       <span>${g.label}</span><small>${formatInterval(due[g.rating]!)}</small></button>`).join("")}</div>`;
 }
 
@@ -254,13 +253,13 @@ function cardTitle(card: Card): string {
 }
 
 function cardSubtitle(card: Card): string {
-  return card.kind === "chord" ? card.quality : `${card.symbols.join(" → ")} · from ${INVERSION_LABELS[card.startInversion].pfa}`;
+  return card.kind === "chord" ? `${card.quality} · ${inversionLabel(card.targetInversion)}` : `${card.symbols.join(" → ")} · from ${INVERSION_LABELS[card.startInversion].pfa}`;
 }
 
 function renderLibrary(id?: string) {
   const card = id ? deck.find((c) => c.id === id) : undefined;
   if (card) {
-    const back = card.kind === "chord" ? chordBack(card) : progressionBack(card);
+    const back = card.kind === "chord" ? chordBack(card, card.targetInversion) : progressionBack(card);
     app.innerHTML = `${topBar("Library", `<button class="link" data-go="library">All cards</button>`)}
       <main class="study"><section class="front compact"><p class="eyebrow">${esc(card.category)}</p><p class="symbol small">${esc(cardTitle(card))}</p>
       ${card.kind === "progression" ? progressionPrompt(card, data.settings.promptStyle) : ""}</section>
@@ -303,7 +302,7 @@ function renderSettings() {
         <div class="stepper">
           <button data-step="-5" aria-label="Fewer">−</button><output id="newPerDay">${s.newPerDay}</output><button data-step="5" aria-label="More">+</button>
         </div>
-        <p class="help">How many new cards to introduce each day. Reviews are never limited.</p>
+        <p class="help">Maximum new cards each day. You can raise this to move through easy stages faster. Reviews are never limited; the next stage waits for successful reviews.</p>
       </section>
       <section>
         <h2>Progression prompts</h2>

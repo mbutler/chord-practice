@@ -26,13 +26,23 @@ export function isActive(card: Card, data: SaveData): boolean {
 
 const byCurriculum = (a: Card, b: Card) => a.level - b.level || a.sequence - b.sequence;
 
+/** A stage advances after every enabled card graduates with successful recall. */
+export function currentLevel(deck: Card[], data: SaveData): number | null {
+  const latest = new Map<string, number>();
+  for (const entry of data.log) latest.set(entry.id, entry.rating);
+  const unfinished = deck.filter((card) => isActive(card, data) &&
+    (!data.cards[card.id] || data.cards[card.id]!.state !== State.Review || (latest.get(card.id) ?? 0) < Rating.Good));
+  return unfinished.length ? Math.min(...unfinished.map((card) => card.level)) : null;
+}
+
 /** New cards available today, in curriculum order, one per sibling group. */
 export function newCardsToday(deck: Card[], data: SaveData): Card[] {
+  const level = currentLevel(deck, data);
   const remaining = Math.max(0, data.settings.newPerDay - data.today.newIds.length);
   const introduced = new Set(data.today.newIds);
   const siblingsToday = new Set(deck.filter((c) => introduced.has(c.id)).map((c) => c.sibling));
   const out: Card[] = [];
-  for (const card of deck.filter((c) => !data.cards[c.id] && isActive(c, data)).sort(byCurriculum)) {
+  for (const card of deck.filter((c) => !data.cards[c.id] && isActive(c, data) && c.level === level).sort(byCurriculum)) {
     if (out.length >= remaining) break;
     if (siblingsToday.has(card.sibling)) continue;
     siblingsToday.add(card.sibling);
@@ -87,11 +97,13 @@ export class Session {
   }
 
   counts(now = Date.now()): Counts {
+    this.news = newCardsToday(this.deck, this.data);
     return { learning: this.learningDue(now + LEARN_AHEAD_MS).length, review: this.reviews.length, new: this.news.length };
   }
 
   /** The next card to show, or null when the session is done. */
   next(now = Date.now()): Card | null {
+    this.news = newCardsToday(this.deck, this.data);
     const learningNow = this.learningDue(now);
     if (learningNow.length) return learningNow[0]!;
     const wantNew = this.news.length > 0 && (this.reviews.length === 0 || this.sinceNew >= REVIEWS_PER_NEW);

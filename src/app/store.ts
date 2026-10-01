@@ -31,7 +31,7 @@ export interface SaveData {
   today: { day: string; newIds: string[] };
 }
 
-const KEY = "chord-practice:v1";
+const KEY = "chord-practice:v2";
 
 export function defaultSettings(): Settings {
   return { newPerDay: 10, promptStyle: "both", categories: {} };

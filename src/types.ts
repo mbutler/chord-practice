@@ -34,6 +34,7 @@ export interface ChordCard extends CardBase {
   symbol: string;
   quality: string;         // e.g. "Minor 7th"
   shapeRule: string;       // how the PfA shape is built, e.g. "Minor triad, drop the root a whole step"
+  targetInversion: Inversion; // each inversion has its own recall schedule
   inversions: Voicing[];   // index = Inversion
 }
 
@@ -45,6 +46,7 @@ export interface ProgressionCard extends CardBase {
   roman: string[];         // e.g. ["ii7", "V7", "Imaj7"]
   symbols: string[];       // e.g. ["Cm7", "F7", "Bbmaj7"]
   form?: string[];         // bar-by-bar chart when it differs from `symbols` (12-bar blues)
+  guided?: boolean;        // diagrams visible while learning rhythm with root positions
   startInversion: Inversion;
   steps: Voicing[];        // the voice-led answer, one per chord
   motions: Motion[];       // steps.length - 1 entries

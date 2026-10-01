@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { Rating, State } from "ts-fsrs";
 import { generateDeck } from "../src/deck/generate";
 import { CATEGORY_FILTERS } from "../src/deck/categories";
-import { dueReviews, newCardsToday, Session } from "../src/app/scheduler";
+import { currentLevel, dueReviews, newCardsToday, Session } from "../src/app/scheduler";
 import { emptyData, nextDayStart, studyDay } from "../src/app/store";
 
 beforeAll(() => {
@@ -16,16 +16,17 @@ beforeAll(() => {
 const deck = generateDeck().cards;
 
 describe("new cards", () => {
-  test("start with triads, alternating major and minor, easiest keys first", () => {
+  test("start with only three familiar major root positions", () => {
     const first = newCardsToday(deck, emptyData()).map((c) => c.id);
-    expect(first.slice(0, 6)).toEqual(["t1_c_maj", "t1_a_min", "t1_g_maj", "t1_e_min", "t1_f_maj", "t1_d_min"]);
-    expect(first).toHaveLength(10);
+    expect(first).toEqual(["t1_c_maj_root", "t1_g_maj_root", "t1_f_maj_root"]);
+    expect(first).toHaveLength(3);
   });
 
   test("respect the daily limit, including cards already introduced today", () => {
     const data = emptyData();
     data.today.newIds = ["x", "y", "z"];
-    expect(newCardsToday(deck, data)).toHaveLength(7);
+    data.settings.newPerDay = 5;
+    expect(newCardsToday(deck, data)).toHaveLength(2);
     data.settings.newPerDay = 0;
     expect(newCardsToday(deck, data)).toHaveLength(0);
   });
@@ -35,8 +36,31 @@ describe("new cards", () => {
     data.settings.newPerDay = 50;
     for (const f of CATEGORY_FILTERS) data.settings.categories[f.id] = f.id === "backbone";
     const cards = newCardsToday(deck, data);
-    expect(cards.length).toBe(12);   // one per key
+    expect(cards.length).toBe(1);   // one per key
     expect(new Set(cards.map((c) => c.sibling)).size).toBe(cards.length);
+  });
+
+  test("successful recall unlocks early rhythm; struggling holds the stage", () => {
+    const data = emptyData();
+    const session = new Session(deck, data);
+    const first = newCardsToday(deck, data);
+    for (const card of first) session.grade(card, Rating.Easy, "Root", 1000);
+    expect(currentLevel(deck, data)).toBe(2);
+    const next = session.next()!;
+    expect(next.kind).toBe("progression");
+    expect(next.kind === "progression" && next.guided).toBe(true);
+    session.undo();
+    expect(currentLevel(deck, data)).toBe(1);
+    session.grade(first[2]!, Rating.Hard, "Root", 1000);
+    expect(currentLevel(deck, data)).toBe(1);
+    expect(newCardsToday(deck, data)).toHaveLength(0);
+  });
+
+  test("all triad roots precede inversion recall; inversions have independent ids", () => {
+    const triads = deck.filter((c) => c.kind === "chord" && ["Major", "Minor"].includes(c.quality));
+    expect(triads.filter((c) => c.kind === "chord" && c.targetInversion === 0).every((c) => c.level < 9)).toBe(true);
+    expect(triads.filter((c) => c.kind === "chord" && c.targetInversion === 2).every((c) => c.level >= 11)).toBe(true);
+    expect(new Set(triads.map((c) => c.id)).size).toBe(72);
   });
 
   test("disabled categories are skipped", () => {
@@ -61,7 +85,7 @@ describe("session", () => {
 
     expect(data.cards[card.id]!.state).toBe(State.Learning);
     expect(data.today.newIds).toEqual([card.id]);
-    expect(s.counts(t0.getTime()).new).toBe(9);
+    expect(s.counts(t0.getTime()).new).toBe(2);
     // Not due yet a second later, but due after its learning step.
     expect(s.next(t0.getTime() + 1000)?.id).not.toBe(card.id);
     expect(s.next(t0.getTime() + 11 * 60_000)?.id).toBe(card.id);

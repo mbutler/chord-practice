@@ -9,8 +9,8 @@ const find = (id: string) => deck.cards.find((c) => c.id === id)!;
 
 describe("deck", () => {
   test("card counts", () => {
-    expect(deck.cards.filter((c) => c.tier === 1)).toHaveLength(9 * 12);
-    expect(progressions).toHaveLength(9 * 12 * 3);
+    expect(deck.cards.filter((c) => c.tier === 1)).toHaveLength(9 * 12 * 3);
+    expect(progressions).toHaveLength(9 * 12 * 3 + 4);
   });
 
   test("ids are unique", () => {
@@ -18,7 +18,7 @@ describe("deck", () => {
   });
 
   test("ids are stable (progress is keyed on them)", () => {
-    for (const id of ["t1_c_maj", "t1_fs_m7", "t1_bb_7", "t2_backbone_c_root", "t3_iivi_bb_mid", "t3_minwalk_am_bwd"]) {
+    for (const id of ["t1_c_maj_root", "t1_fs_m7_bwd", "t1_bb_7_mid", "t2_backbone_c_root", "t3_iivi_bb_mid", "t3_minwalk_am_bwd"]) {
       expect(find(id)).toBeDefined();
     }
   });
@@ -43,7 +43,7 @@ describe("deck", () => {
   test("no change needs a big hand jump", () => {
     // Worst-case total finger travel on any single change, in semitones.
     let worst = { amount: 0, where: "" };
-    for (const p of progressions) {
+    for (const p of progressions.filter((c) => !c.guided)) {
       p.steps.slice(1).forEach((v, i) => {
         const t = travel(p.steps[i]!, v);
         if (t > worst.amount) worst = { amount: t, where: `${p.id} step ${i + 1}` };
