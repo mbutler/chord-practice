@@ -26,23 +26,39 @@ export function isActive(card: Card, data: SaveData): boolean {
 
 const byCurriculum = (a: Card, b: Card) => a.level - b.level || a.sequence - b.sequence;
 
-/** A stage advances after every enabled card graduates with successful recall. */
-export function currentLevel(deck: Card[], data: SaveData): number | null {
+function latestRatings(data: SaveData): Map<string, number> {
   const latest = new Map<string, number>();
   for (const entry of data.log) latest.set(entry.id, entry.rating);
-  const unfinished = deck.filter((card) => isActive(card, data) &&
-    (!data.cards[card.id] || data.cards[card.id]!.state !== State.Review || (latest.get(card.id) ?? 0) < Rating.Good));
+  return latest;
+}
+
+function isLearning(s: SavedCard) {
+  return s.state === State.Learning || s.state === State.Relearning;
+}
+
+function isUnfinished(card: Card, data: SaveData, latest = latestRatings(data)): boolean {
+  const saved = data.cards[card.id];
+  return !saved || saved.state !== State.Review || (latest.get(card.id) ?? 0) < Rating.Good;
+}
+
+/** Lowest stage that still has unseen cards; otherwise the lowest unfinished review stage. */
+export function currentLevel(deck: Card[], data: SaveData): number | null {
+  const active = deck.filter((card) => isActive(card, data));
+  const unseen = active.filter((card) => !data.cards[card.id]);
+  if (unseen.length) return Math.min(...unseen.map((card) => card.level));
+  const latest = latestRatings(data);
+  const unfinished = active.filter((card) => isUnfinished(card, data, latest));
   return unfinished.length ? Math.min(...unfinished.map((card) => card.level)) : null;
 }
 
-/** New cards available today, in curriculum order, one per sibling group. */
+/** New cards in curriculum order, filling today's remaining new-card slots. */
 export function newCardsToday(deck: Card[], data: SaveData): Card[] {
-  const level = currentLevel(deck, data);
   const remaining = Math.max(0, data.settings.newPerDay - data.today.newIds.length);
+  if (!remaining) return [];
   const introduced = new Set(data.today.newIds);
   const siblingsToday = new Set(deck.filter((c) => introduced.has(c.id)).map((c) => c.sibling));
   const out: Card[] = [];
-  for (const card of deck.filter((c) => !data.cards[c.id] && isActive(c, data) && c.level === level).sort(byCurriculum)) {
+  for (const card of deck.filter((c) => !data.cards[c.id] && isActive(c, data)).sort(byCurriculum)) {
     if (out.length >= remaining) break;
     if (siblingsToday.has(card.sibling)) continue;
     siblingsToday.add(card.sibling);
@@ -51,8 +67,15 @@ export function newCardsToday(deck: Card[], data: SaveData): Card[] {
   return out;
 }
 
-function isLearning(s: SavedCard) {
-  return s.state === State.Learning || s.state === State.Relearning;
+/** Review cards that still need a successful grade, even if FSRS has not made them due. */
+export function leftoverReviews(deck: Card[], data: SaveData): Card[] {
+  const latest = latestRatings(data);
+  return deck
+    .filter((card) => {
+      const saved = data.cards[card.id];
+      return saved && isActive(card, data) && !isLearning(saved) && isUnfinished(card, data, latest);
+    })
+    .sort(byCurriculum);
 }
 
 /** Review cards due today (before the 4am rollover), most overdue first. */
@@ -79,15 +102,20 @@ export interface Counts {
   new: number;
 }
 
+type Pool = "review" | "new" | "learning" | "leftover";
+
 export class Session {
   private reviews: Card[];
   private news: Card[];
+  private leftovers: Card[];
   private sinceNew = 0;
-  private undoStack: { id: string; prev: SavedCard | undefined; logLength: number; sinceNew: number; pool: "review" | "new" | "learning" }[] = [];
+  private undoStack: { id: string; prev: SavedCard | undefined; logLength: number; sinceNew: number; pool: Pool }[] = [];
 
   constructor(private deck: Card[], private data: SaveData) {
     this.reviews = dueReviews(deck, data);
     this.news = newCardsToday(deck, data);
+    const dueIds = new Set(this.reviews.map((card) => card.id));
+    this.leftovers = leftoverReviews(deck, data).filter((card) => !dueIds.has(card.id));
   }
 
   private learningDue(horizon: number): Card[] {
@@ -98,7 +126,10 @@ export class Session {
 
   counts(now = Date.now()): Counts {
     this.news = newCardsToday(this.deck, this.data);
-    return { learning: this.learningDue(now + LEARN_AHEAD_MS).length, review: this.reviews.length, new: this.news.length };
+    const learning = this.learningDue(now + LEARN_AHEAD_MS).length;
+    const review = this.reviews.length;
+    const extra = learning + review + this.news.length === 0 ? this.leftovers.length : 0;
+    return { learning, review: review + extra, new: this.news.length };
   }
 
   /** The next card to show, or null when the session is done. */
@@ -109,7 +140,7 @@ export class Session {
     const wantNew = this.news.length > 0 && (this.reviews.length === 0 || this.sinceNew >= REVIEWS_PER_NEW);
     if (wantNew) return this.news[0]!;
     if (this.reviews.length) return this.reviews[0]!;
-    return this.learningDue(now + LEARN_AHEAD_MS)[0] ?? null;
+    return this.learningDue(now + LEARN_AHEAD_MS)[0] ?? this.leftovers[0] ?? null;
   }
 
   /** Interval each grade would give, for the button labels. */
@@ -121,7 +152,7 @@ export class Session {
 
   grade(card: Card, rating: Grade, asked: string, ms: number, now = new Date()): void {
     const prev = this.data.cards[card.id];
-    const pool = !prev ? "new" : isLearning(prev) ? "learning" : "review";
+    const pool: Pool = !prev ? "new" : isLearning(prev) ? "learning" : this.reviews.some((c) => c.id === card.id) ? "review" : "leftover";
     this.undoStack.push({ id: card.id, prev, logLength: this.data.log.length, sinceNew: this.sinceNew, pool });
 
     const next = scheduler.next(prev ? toFsrs(prev) : createEmptyCard(now), now, rating);
@@ -135,6 +166,8 @@ export class Session {
     } else if (pool === "review") {
       this.reviews = this.reviews.filter((c) => c.id !== card.id);
       this.sinceNew++;
+    } else if (pool === "leftover") {
+      this.leftovers = this.leftovers.filter((c) => c.id !== card.id);
     }
     save(this.data);
   }
@@ -156,6 +189,7 @@ export class Session {
       this.news.unshift(card);
     }
     if (u.pool === "review") this.reviews.unshift(card);
+    if (u.pool === "leftover") this.leftovers.unshift(card);
     this.sinceNew = u.sinceNew;
     save(this.data);
     return card;

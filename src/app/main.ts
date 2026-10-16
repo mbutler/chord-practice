@@ -131,7 +131,7 @@ function renderHome() {
       <h1 class="title">Chord Practice</h1>
       <p class="subtitle">Piano For All · chords, inversions &amp; progressions</p>
       ${isStandalone() ? "" : `<p class="notice">Progress is saved in this browser only. To keep it safe, add this page to your Home Screen (Share → Add to Home Screen) and export a backup now and then from Settings.</p>`}
-      <p class="notice">${currentLevel(deck, data) === null ? "All stages introduced · keep practicing your reviews." : `Stage ${currentLevel(deck, data)}: ${esc(STAGES[currentLevel(deck, data)!] ?? "Practice")}<br>New stages open after successful reviews. Easy moves familiar cards ahead; Again and Hard give difficult shapes more practice.`}</p>
+      <p class="notice">${currentLevel(deck, data) === null ? "All stages introduced · keep practicing your reviews." : `Stage ${currentLevel(deck, data)}: ${esc(STAGES[currentLevel(deck, data)!] ?? "Practice")}<br>Each day fills up to your new-card limit in this order. Easy parks a familiar shape for later and those slots go to the next cards.`}</p>
       <section class="counts">
         <div><b class="n-learn">${c.learning}</b><span>Learning</span></div>
         <div><b class="n-review">${c.review}</b><span>Review</span></div>
@@ -347,7 +347,7 @@ function renderSettings() {
         <div class="stepper">
           <button data-step="-5" aria-label="Fewer">−</button><output id="newPerDay">${s.newPerDay}</output><button data-step="5" aria-label="More">+</button>
         </div>
-        <p class="help">Maximum new cards each day. You can raise this to move through easy stages faster. Reviews are never limited; the next stage waits for successful reviews.</p>
+        <p class="help">Maximum new cards each day. Easy cards leave the remaining slots for the next shapes. Raise this to move through the deck faster. Reviews are never limited.</p>
       </section>
       <section>
         <h2>Progression prompts</h2>

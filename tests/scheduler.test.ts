@@ -16,10 +16,11 @@ beforeAll(() => {
 const deck = generateDeck().cards;
 
 describe("new cards", () => {
-  test("start with only three familiar major root positions", () => {
-    const first = newCardsToday(deck, emptyData()).map((c) => c.id);
-    expect(first).toEqual(["t1_c_maj_root", "t1_g_maj_root", "t1_f_maj_root"]);
-    expect(first).toHaveLength(3);
+  test("start with familiar major roots, then fill the daily new-card slots", () => {
+    const first = newCardsToday(deck, emptyData());
+    expect(first.slice(0, 3).map((c) => c.id)).toEqual(["t1_c_maj_root", "t1_g_maj_root", "t1_f_maj_root"]);
+    expect(first).toHaveLength(10);
+    expect(first[3]!.kind).toBe("progression");
   });
 
   test("respect the daily limit, including cards already introduced today", () => {
@@ -36,24 +37,44 @@ describe("new cards", () => {
     data.settings.newPerDay = 50;
     for (const f of CATEGORY_FILTERS) data.settings.categories[f.id] = f.id === "backbone";
     const cards = newCardsToday(deck, data);
-    expect(cards.length).toBe(1);   // one per key
+    expect(cards.length).toBeGreaterThan(1);
     expect(new Set(cards.map((c) => c.sibling)).size).toBe(cards.length);
   });
 
-  test("successful recall unlocks early rhythm; struggling holds the stage", () => {
+  test("Easy on a short stage spends the leftover new-card slots on the next shapes", () => {
     const data = emptyData();
     const session = new Session(deck, data);
-    const first = newCardsToday(deck, data);
+    const first = newCardsToday(deck, data).filter((card) => card.level === 1);
+    expect(first).toHaveLength(3);
     for (const card of first) session.grade(card, Rating.Easy, "Root", 1000);
     expect(currentLevel(deck, data)).toBe(2);
     const next = session.next()!;
     expect(next.kind).toBe("progression");
     expect(next.kind === "progression" && next.guided).toBe(true);
+    expect(newCardsToday(deck, data).length).toBe(7);
     session.undo();
-    expect(currentLevel(deck, data)).toBe(1);
     session.grade(first[2]!, Rating.Hard, "Root", 1000);
-    expect(currentLevel(deck, data)).toBe(1);
-    expect(newCardsToday(deck, data)).toHaveLength(0);
+    expect(currentLevel(deck, data)).toBe(2);
+    const news = newCardsToday(deck, data);
+    expect(news[0]!.kind).toBe("progression");
+    expect(news.length).toBe(7);
+  });
+
+  test("a new day still has a lesson after a hard grade left nothing due", () => {
+    const data = emptyData();
+    const session = new Session(deck, data);
+    const first = newCardsToday(deck, data).filter((card) => card.level === 1);
+    session.grade(first[0]!, Rating.Hard, "Root", 1000);
+    session.grade(first[1]!, Rating.Easy, "Root", 1000);
+    session.grade(first[2]!, Rating.Easy, "Root", 1000);
+    data.today = { day: "2026-10-14", newIds: [] };
+    for (const id of Object.keys(data.cards)) {
+      data.cards[id]!.due = "2026-10-20T12:00:00.000Z";
+    }
+    expect(dueReviews(deck, data, new Date("2026-10-15T16:00:00"))).toHaveLength(0);
+    const news = newCardsToday(deck, data);
+    expect(news.length).toBeGreaterThan(0);
+    expect(news[0]!.kind).toBe("progression");
   });
 
   test("all triad roots precede inversion recall; inversions have independent ids", () => {
@@ -85,7 +106,7 @@ describe("session", () => {
 
     expect(data.cards[card.id]!.state).toBe(State.Learning);
     expect(data.today.newIds).toEqual([card.id]);
-    expect(s.counts(t0.getTime()).new).toBe(2);
+    expect(s.counts(t0.getTime()).new).toBe(9);
     // Not due yet a second later, but due after its learning step.
     expect(s.next(t0.getTime() + 1000)?.id).not.toBe(card.id);
     expect(s.next(t0.getTime() + 11 * 60_000)?.id).toBe(card.id);
@@ -112,6 +133,23 @@ describe("session", () => {
     expect(dueReviews(deck, data, now).map((c) => c.id)).toEqual([card.id]);
     data.cards[card.id] = { ...base, due: new Date(nextDayStart(now).getTime() + 60_000).toISOString() };
     expect(dueReviews(deck, data, now)).toHaveLength(0);
+  });
+
+  test("an unfinished card still appears when nothing else is due", () => {
+    const data = emptyData();
+    data.settings.newPerDay = 0;
+    const now = new Date();
+    const card = deck.find((c) => c.id === "t1_c_maj_root")!;
+    data.cards[card.id] = {
+      stability: 5, difficulty: 5, elapsed_days: 0, scheduled_days: 3, reps: 3, lapses: 0,
+      learning_steps: 0, state: State.Review, due: new Date(now.getTime() + 3 * 86400_000).toISOString(),
+    };
+    data.log.push({ id: card.id, at: now.toISOString(), rating: Rating.Hard, asked: "Root", ms: 1000 });
+    const s = new Session(deck, data);
+    expect(s.counts(now.getTime())).toEqual({ learning: 0, review: 1, new: 0 });
+    expect(s.next(now.getTime())?.id).toBe(card.id);
+    s.grade(card, Rating.Hard, "Root", 1000, now);
+    expect(s.next(now.getTime())).toBeNull();
   });
 
   test("new cards are mixed in between reviews", () => {

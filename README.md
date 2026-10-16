@@ -8,12 +8,13 @@ built for an iPad at the piano.
   roots, first inversions, second inversions, and then more advanced shapes.
 - Guided rhythm exercises appear alongside the early chords. Later progression
   cards use nearby inversions and all the original rhythm styles in every key.
-- Each chord inversion has its own FSRS schedule. New stages open when every enabled
-  card in the current stage has graduated to review with a Good or Easy grade.
-  Difficult reviews pause new introductions until successful again.
+- Each chord inversion has its own FSRS schedule. Each day fills unused new-card
+  slots in curriculum order, so Easy on familiar shapes brings the next cards in
+  the same session. Difficult cards come back as reviews.
 - Easy lets familiar material advance immediately; Good may require a short learning
-  repeat. The daily new-card setting is a maximum, not a target. Raise it in Settings
-  to move through familiar stages faster. All material remains available in Library.
+  repeat. The daily new-card setting is how many unseen cards to introduce; unused
+  slots spill into the next stage. Raise it in Settings to move faster. All material
+  remains available in Library.
 - Right-hand shapes follow Piano For All: 7ths and 6ths are 3-note shapes (C7 = Bb E G),
   with the left hand assumed to play the root.
 - Progression practice includes a rhythm reference: count-in clicks, two bars of
